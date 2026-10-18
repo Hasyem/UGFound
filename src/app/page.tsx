@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
@@ -155,11 +155,11 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Real-time Campus KPI Metrics Banner (PRD Section 3 Objective) */}
+        {/* Real-time Campus Metrics Banner */}
         <div className="relative max-w-5xl mx-auto mt-14 pt-8 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-sm">
             <div className="flex items-center justify-center gap-1.5 text-emerald-400 text-xs font-semibold mb-1">
-              <TrendingUp className="w-4 h-4" /> Target KR 1
+              <TrendingUp className="w-4 h-4" /> Tingkat Keberhasilan
             </div>
             <p className="text-2xl sm:text-3xl font-black text-white">{stats.resolutionRate}%</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Tingkat Pengembalian (&gt;85%)</p>
@@ -167,7 +167,7 @@ export default function HomePage() {
 
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-sm">
             <div className="flex items-center justify-center gap-1.5 text-blue-400 text-xs font-semibold mb-1">
-              <Clock className="w-4 h-4" /> Target KR 2
+              <Clock className="w-4 h-4" /> Waktu Pengembalian
             </div>
             <p className="text-2xl sm:text-3xl font-black text-white">&lt; {stats.avgResolutionHours || 24} Jam</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Rata-rata Waktu Kembali</p>

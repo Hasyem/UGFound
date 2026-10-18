@@ -91,6 +91,26 @@ export default function MyReportsPage() {
   const totalResolved = reports.filter((r) => r.status === 'resolved').length
   const totalActive = reports.filter((r) => r.status === 'active' || r.status === 'claim_in_progress').length
 
+  if (!user) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-20 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+          <FileText className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Riwayat Laporan Saya</h2>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Silakan masuk terlebih dahulu untuk melihat dan mengelola status barang hilang atau temuan yang pernah Anda laporkan.
+        </p>
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow transition"
+        >
+          Masuk ke Akun
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Header */}

@@ -1,4 +1,4 @@
-﻿export const CATEGORIES = [
+export const CATEGORIES = [
   { id: 1, name: 'Elektronik', icon: '💻' },
   { id: 2, name: 'Dokumen/KTM', icon: '📄' },
   { id: 3, name: 'Kunci', icon: '🔑' },

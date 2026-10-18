@@ -54,6 +54,9 @@ export default function AdminPage() {
 
       const s = await DataService.getAdminStats()
       setStats(s)
+
+      const u = await DataService.getUsers()
+      setUsers(u)
     } finally {
       setLoading(false)
     }
@@ -71,11 +74,11 @@ export default function AdminPage() {
         </div>
         <h2 className="text-xl font-bold text-slate-900">Akses Terbatas: Hanya Administrator</h2>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Halaman ini memerlukan kredensial peran admin (F-09). Anda saat ini login sebagai{' '}
+          Halaman ini memerlukan kredensial peran admin. Anda saat ini login sebagai{' '}
           <strong className="text-slate-800">{profile?.name || 'Tamu'}</strong> ({profile?.role || 'user'}).
         </p>
         <div className="p-4 bg-slate-100 rounded-2xl text-xs text-slate-700">
-          💡 Gunakan menu <strong>"Ganti Role"</strong> di bilah atas navbar lalu pilih <strong>"Admin Lost & Found UG"</strong> untuk mengakses panel ini.
+          💡 Silakan masuk melalui <Link href="/login" className="text-blue-600 font-bold underline">Halaman Login</Link> menggunakan akun Administrator (<strong>farras.85.243@gmail.com</strong>).
         </div>
         <Link
           href="/"
@@ -129,7 +132,7 @@ export default function AdminPage() {
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            UGFound • F-09 Moderasi Dasar, Antrean Laporan Pelanggaran, dan Analitik Kampus
+            UGFound • Moderasi Laporan, Penanganan Pelanggaran, dan Analitik Kampus
           </p>
         </div>
 
@@ -142,12 +145,12 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* KPI Objective Banner (PRD Section 3 OKRs) */}
+      {/* KPI Objective Banner */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Resolution Rate</span>
-            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">KR 1 (&gt;85%)</span>
+            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">Target &gt;85%</span>
           </div>
           <p className="text-3xl font-black text-slate-900 mt-2">{stats.resolutionRate}%</p>
           <p className="text-xs text-slate-500 mt-0.5">{stats.resolvedFound} dari {stats.totalFound} temuan selesai</p>
@@ -156,7 +159,7 @@ export default function AdminPage() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Rata-rata Waktu</span>
-            <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded">KR 2 (&lt;48 Jam)</span>
+            <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded">Target &lt;48 Jam</span>
           </div>
           <p className="text-3xl font-black text-slate-900 mt-2">{stats.avgResolutionHours || 24} Jam</p>
           <p className="text-xs text-slate-500 mt-0.5">Dari lapor hingga serah terima</p>
@@ -171,7 +174,7 @@ export default function AdminPage() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Antrean Moderasi</span>
-            <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded">F-08 Flags</span>
+            <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded">Laporan Masuk</span>
           </div>
           <p className="text-3xl font-black text-rose-600 mt-2">{flags.length}</p>
           <p className="text-xs text-slate-500 mt-0.5">Laporan perlu ditinjau admin</p>
@@ -201,13 +204,13 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* Tab 1: Moderation Queue (F-08 & F-09) */}
+      {/* Tab 1: Moderation Queue */}
       {activeTab === 'moderation' && (
         <div className="space-y-4">
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 flex items-start gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <strong>Aturan Moderasi Otomatis (F-08):</strong>
+              <strong>Aturan Moderasi Otomatis:</strong>
               <p className="mt-0.5 text-amber-800">
                 Laporan yang dilaporkan oleh 3 pengguna berbeda disembunyikan otomatis oleh sistem dari feed beranda sampai ditinjau oleh Admin di sini.
               </p>

@@ -59,6 +59,29 @@ function saveLocalFlags(flags: any[]) {
   }
 }
 
+function getLocalUsers(): Tables<'users'>[] {
+  if (typeof window === 'undefined') return MOCK_USERS
+  try {
+    const data = localStorage.getItem(LOCAL_USERS_KEY)
+    if (!data) {
+      localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(MOCK_USERS))
+      return MOCK_USERS
+    }
+    return JSON.parse(data)
+  } catch {
+    return MOCK_USERS
+  }
+}
+
+function saveLocalUsers(users: Tables<'users'>[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users))
+  } catch (e) {
+    console.error('Failed to save users to localStorage:', e)
+  }
+}
+
 export interface ReportFilterOptions {
   type?: ReportType | 'all'
   category_id?: number
@@ -431,5 +454,110 @@ export const DataService = {
       if (data) return data
     }
     return getLocalFlags()
+  },
+
+  async getUsers(): Promise<Tables<'users'>[]> {
+    if (this.isLive) {
+      const supabase = createClient()
+      const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false })
+      if (data) return data
+    }
+    return getLocalUsers()
+  },
+
+  async getUserByEmail(email: string): Promise<Tables<'users'> | null> {
+    const cleanEmail = email.toLowerCase().trim()
+    if (this.isLive) {
+      const supabase = createClient()
+      const { data } = await supabase.from('users').select('*').eq('email', cleanEmail).single()
+      if (data) return data
+    }
+    const users = getLocalUsers()
+    return users.find((u) => u.email.toLowerCase().trim() === cleanEmail) || null
+  },
+
+  async authenticateUser(
+    email: string,
+    password?: string
+  ): Promise<{ success: boolean; user?: Tables<'users'>; message: string }> {
+    const cleanEmail = email.toLowerCase().trim()
+
+    // 1. Role Admin Verification: farras.85.243@gmail.com with password FAS99905
+    if (cleanEmail === 'farras.85.243@gmail.com') {
+      if (password && password !== 'FAS99905') {
+        return { success: false, message: 'Password untuk akun Admin salah!' }
+      }
+
+      const adminUser: Tables<'users'> = {
+        id: '00000000-0000-0000-0000-000000000001',
+        email: 'farras.85.243@gmail.com',
+        name: 'Farras (Admin UGFound)',
+        role: 'admin',
+        phone: '081234567890',
+        email_verified_at: new Date().toISOString(),
+        is_active: true,
+        avatar_url: null,
+        created_at: '2026-09-01T08:00:00Z',
+      }
+      await this.createOrUpdateUser(adminUser)
+      return { success: true, user: adminUser, message: 'Login Administrator berhasil!' }
+    }
+
+    // 2. Check other registered users
+    const existing = await this.getUserByEmail(cleanEmail)
+    if (existing) {
+      if (!existing.is_active) {
+        return { success: false, message: 'Akun Anda dinonaktifkan oleh Administrator.' }
+      }
+      return { success: true, user: existing, message: 'Login berhasil!' }
+    }
+
+    // 3. If password was provided for non-existing user
+    return {
+      success: false,
+      message: 'Akun tidak ditemukan. Silakan gunakan pendaftaran atau login via OTP Email.',
+    }
+  },
+
+  async createOrUpdateUser(userData: Partial<Tables<'users'>> & { email: string }): Promise<Tables<'users'>> {
+    const cleanEmail = userData.email.toLowerCase().trim()
+    const users = getLocalUsers()
+    const existingIndex = users.findIndex((u) => u.email.toLowerCase().trim() === cleanEmail)
+
+    let updatedUser: Tables<'users'>
+    if (existingIndex >= 0) {
+      updatedUser = {
+        ...users[existingIndex],
+        ...userData,
+        email: cleanEmail,
+      }
+      users[existingIndex] = updatedUser
+    } else {
+      updatedUser = {
+        id: userData.id || (cleanEmail === 'farras.85.243@gmail.com' ? '00000000-0000-0000-0000-000000000001' : 'usr-' + Date.now()),
+        email: cleanEmail,
+        name: userData.name || (cleanEmail === 'farras.85.243@gmail.com' ? 'Farras (Admin UGFound)' : cleanEmail.split('@')[0].replace('.', ' ').toUpperCase()),
+        role: cleanEmail === 'farras.85.243@gmail.com' ? 'admin' : (userData.role || 'mahasiswa'),
+        phone: userData.phone || null,
+        email_verified_at: userData.email_verified_at || new Date().toISOString(),
+        is_active: true,
+        avatar_url: userData.avatar_url || null,
+        created_at: userData.created_at || new Date().toISOString(),
+      }
+      users.push(updatedUser)
+    }
+
+    saveLocalUsers(users)
+
+    if (this.isLive) {
+      try {
+        const supabase = createClient()
+        await (supabase as any).from('users').upsert(updatedUser)
+      } catch (err) {
+        console.error('Failed to sync user with Supabase:', err)
+      }
+    }
+
+    return updatedUser
   },
 }

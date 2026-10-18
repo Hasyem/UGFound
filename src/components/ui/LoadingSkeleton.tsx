@@ -1,4 +1,4 @@
-﻿export function ReportCardSkeleton() {
+export function ReportCardSkeleton() {
   return (
     <div className="flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs animate-pulse">
       <div className="aspect-[16/10] bg-slate-200" />

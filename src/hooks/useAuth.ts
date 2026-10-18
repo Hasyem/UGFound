@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -84,34 +84,17 @@ export function useAuth() {
         }
       }
 
-      // Default: logged in as demo student for immediate convenience
-      const defaultUser = MOCK_USERS[1] // Dimas Aditya (Mahasiswa)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_AUTH_USER_KEY, JSON.stringify(defaultUser))
-      }
+      // No active session found
       setAuthState({
-        user: { id: defaultUser.id, email: defaultUser.email },
-        profile: defaultUser,
+        user: null,
+        profile: null,
         loading: false,
-        isAdmin: defaultUser.role === 'admin',
+        isAdmin: false,
       })
     }
 
     initAuth()
   }, [fetchProfile, isLiveSupabase])
-
-  const switchDemoAccount = (role: UserRole) => {
-    const found = MOCK_USERS.find((u) => u.role === role) || MOCK_USERS[1]
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_AUTH_USER_KEY, JSON.stringify(found))
-    }
-    setAuthState({
-      user: { id: found.id, email: found.email },
-      profile: found,
-      loading: false,
-      isAdmin: found.role === 'admin',
-    })
-  }
 
   const signOut = async () => {
     if (isLiveSupabase) {
@@ -150,7 +133,6 @@ export function useAuth() {
   return {
     ...authState,
     signOut,
-    switchDemoAccount,
     loginWithCustomUser,
   }
 }

@@ -1,10 +1,10 @@
-﻿import type { ReportWithRelations, Tables } from '@/types/database'
+import type { ReportWithRelations, Tables } from '@/types/database'
 
 export const MOCK_USERS: Tables<"users">[] = [
   {
     id: "usr-admin-01",
-    name: "Admin Lost & Found UG",
-    email: "admin.ugfound@gunadarma.ac.id",
+    name: "Farras (Admin UGFound)",
+    email: "farras.85.243@gmail.com",
     role: "admin",
     phone: "081234567890",
     email_verified_at: "2026-09-01T08:00:00Z",

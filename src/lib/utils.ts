@@ -1,4 +1,4 @@
-﻿import { formatDistanceToNow, format, isValid } from 'date-fns'
+import { formatDistanceToNow, format, isValid } from 'date-fns'
 import { id } from 'date-fns/locale'
 
 export function formatRelativeTime(dateString: string | null | undefined): string {

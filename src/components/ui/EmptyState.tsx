@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { SearchX, PlusCircle } from 'lucide-react'
 
 interface EmptyStateProps {

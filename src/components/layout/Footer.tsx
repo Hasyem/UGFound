@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { Shield, MapPin, Heart, Clock, AlertTriangle } from 'lucide-react'
 
 export default function Footer() {

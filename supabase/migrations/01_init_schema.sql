@@ -220,7 +220,7 @@ INSERT INTO public.locations (campus, building, floor, is_active) VALUES
 ('Kampus E', 'Pos Satpam Kelapa Dua', null, true)
 ON CONFLICT DO NOTHING;
 
--- Seed Admin User
+-- Seed Admin User (Default: farras.85.243@gmail.com)
 INSERT INTO public.users (id, email, name, role, is_active) VALUES
-('00000000-0000-0000-0000-000000000001', 'admin.ugfound@gunadarma.ac.id', 'Admin Lost & Found UG', 'admin', true)
-ON CONFLICT (email) DO NOTHING;
+('00000000-0000-0000-0000-000000000001', 'farras.85.243@gmail.com', 'Farras (Admin UGFound)', 'admin', true)
+ON CONFLICT (email) DO UPDATE SET role = 'admin', name = 'Farras (Admin UGFound)';
