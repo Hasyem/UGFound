@@ -13,7 +13,6 @@ export interface SendOtpResult {
   success: boolean
   emailSent: boolean
   message: string
-  devCode?: string
 }
 
 export interface VerifyOtpResult {
@@ -23,11 +22,27 @@ export interface VerifyOtpResult {
 
 function getMailTransporter() {
   const host = process.env.SMTP_HOST
-  const port = parseInt(process.env.SMTP_PORT || '587', 10)
+  const port = parseInt(process.env.SMTP_PORT || '465', 10)
   const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
+  const pass = process.env.SMTP_PASS?.replace(/\s+/g, '') // Bersihkan spasi dari Google App Password
+  const service = process.env.SMTP_SERVICE
 
-  if (!host || !user || !pass) {
+  if (!user || !pass || pass === 'your_gmail_app_password' || pass.includes('your_')) {
+    return null
+  }
+
+  // Konfigurasi Gmail langsung jika menggunakan Gmail
+  if (service?.toLowerCase() === 'gmail' || host?.includes('gmail') || user.endsWith('@gmail.com')) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    })
+  }
+
+  if (!host) {
     return null
   }
 
@@ -38,6 +53,9 @@ function getMailTransporter() {
     auth: {
       user,
       pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
     },
   })
 }
@@ -57,16 +75,19 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
     attempts: 0,
   })
 
-  console.log(`[UGFound OTP Service] Generated OTP for ${cleanEmail}: ${code}`)
+  // Log server terminal untuk pengawasan teknis admin (TIDAK diekspos ke browser / client)
+  console.log(`\n======================================================`)
+  console.log(`[UGFound OTP Service] KODE OTP UNTUK ${cleanEmail}: ${code}`)
+  console.log(`======================================================\n`)
 
   const transporter = getMailTransporter()
 
   if (!transporter) {
+    console.warn(`[UGFound OTP Service] SMTP belum dikonfigurasi di .env.local!`)
     return {
-      success: true,
+      success: false,
       emailSent: false,
-      devCode: code,
-      message: `Kode OTP berhasil dibuat untuk ${cleanEmail}. (Aktifkan SMTP di .env.local untuk pengiriman email langsung)`,
+      message: `Layanan pengiriman email belum aktif. Harap lengkapi SMTP_USER dan SMTP_PASS di file .env.local agar kode OTP terkirim ke email Anda.`,
     }
   }
 
@@ -101,14 +122,14 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
           <div class="content">
             <div class="greeting">Halo, ${recipientName || cleanEmail}!</div>
             <p style="font-size: 14px; color: #475569; line-height: 1.5; margin: 0;">
-              Berikut adalah kode verifikasi OTP Anda untuk masuk ke sistem <strong>UGFound</strong>:
+              Berikut adalah kode verifikasi OTP Anda untuk registrasi / login ke sistem <strong>UGFound</strong>:
             </p>
             <div class="otp-box">
               <div class="otp-code">${code}</div>
             </div>
             <p class="warning">
               ⏱️ <strong>Penting:</strong> Kode ini hanya berlaku selama <strong>10 menit</strong>.<br/>
-              Jangan berikan kode ini kepada pihak mana pun demi menjaga keamanan akun sivitas akademika Anda.
+              Demi keamanan akun Anda, jangan berikan atau bagikan kode ini kepada siapa pun.
             </p>
           </div>
           <div class="footer">
@@ -123,23 +144,22 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
       from: fromAddress,
       to: cleanEmail,
       subject: `[UGFound] Kode Verifikasi OTP Anda: ${code}`,
-      text: `Kode verifikasi OTP UGFound Anda adalah: ${code}. Berlaku selama 10 menit.`,
+      text: `Kode verifikasi OTP UGFound Anda adalah: ${code}. Berlaku selama 10 menit. Jangan berikan kode ini kepada pihak mana pun demi menjaga keamanan akun.`,
       html: htmlContent,
     })
 
     return {
       success: true,
       emailSent: true,
-      message: `Kode verifikasi OTP telah dikirimkan ke email ${cleanEmail}. Silakan periksa kotak masuk atau spam Anda.`,
+      message: `Kode verifikasi OTP telah dikirimkan ke email ${cleanEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
     }
   } catch (error: any) {
     console.error('[UGFound OTP Service] Error sending email via SMTP:', error)
-    // Fallback gracefully so login is never blocked if SMTP temporarily fails
+    // Jangan pernah mengekspos kode OTP di pesan error
     return {
-      success: true,
+      success: false,
       emailSent: false,
-      devCode: code,
-      message: `Gagal mengirim email via SMTP (${error?.message || 'Koneksi error'}). Kode OTP sementara: ${code}`,
+      message: `Gagal mengirim email via SMTP (${error?.message || 'Koneksi error'}). Silakan periksa pengaturan SMTP atau coba beberapa saat lagi.`,
     }
   }
 }

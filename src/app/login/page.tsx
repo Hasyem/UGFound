@@ -41,7 +41,6 @@ export default function LoginPage() {
   // OTP flow states
   const [otpStep, setOtpStep] = useState<boolean>(false)
   const [otpCode, setOtpCode] = useState<string>('')
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
 
   // 1. Password Login Handler (Direct login, e.g. Admin farras.85.243@gmail.com / FAS99905)
@@ -100,7 +99,6 @@ export default function LoginPage() {
     }
 
     setLoading(true)
-    setDevOtpHint(null)
 
     try {
       const res = await fetch('/api/auth/send-otp', {
@@ -113,20 +111,10 @@ export default function LoginPage() {
 
       if (data.success) {
         setOtpStep(true)
-        if (data.emailSent) {
-          toast.success(`Kode OTP 6-digit telah terkirim ke email ${cleanEmail}! Periksa kotak masuk Anda.`, {
-            duration: 6000,
-          })
-        } else {
-          // Dev / fallback notice when SMTP credentials are not yet defined
-          if (data.devCode) {
-            setDevOtpHint(data.devCode)
-          }
-          toast.success(
-            `Kode verifikasi dibuat! ${data.devCode ? `(Kode: ${data.devCode})` : ''}`,
-            { duration: 7000 }
-          )
-        }
+        toast.success(
+          data.message || `Kode OTP 6-digit telah dikirimkan ke email ${cleanEmail}! Periksa kotak masuk atau spam Anda.`,
+          { duration: 6000 }
+        )
       } else {
         toast.error(data.message || 'Gagal mengirimkan kode OTP.')
       }
@@ -415,15 +403,6 @@ export default function LoginPage() {
                     </p>
                   </div>
 
-                  {/* Dev / test helper if SMTP is offline */}
-                  {devOtpHint && (
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 text-center">
-                      <span className="font-bold">Kode OTP Anda:</span>{' '}
-                      <span className="font-mono font-black text-sm tracking-widest text-amber-950 bg-white px-2 py-0.5 rounded border border-amber-200">
-                        {devOtpHint}
-                      </span>
-                    </div>
-                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 text-center block">
