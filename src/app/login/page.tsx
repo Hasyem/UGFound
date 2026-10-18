@@ -11,16 +11,14 @@ import {
   ArrowRight,
   CheckCircle2,
   KeyRound,
-  AlertCircle,
-  Building,
   RefreshCw,
   Phone,
-  Info,
   Clock,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { isGunadarmaEmail } from '@/lib/utils'
-import { USER_ROLES } from '@/lib/constants'
 import { DataService } from '@/lib/data-service'
 import type { UserRole } from '@/types/database'
 import toast from 'react-hot-toast'
@@ -29,17 +27,24 @@ export default function LoginPage() {
   const router = useRouter()
   const { loginWithCustomUser } = useAuth()
 
-  // Tabs: 'password' | 'otp' | 'register'
-  const [authMethod, setAuthMethod] = useState<'password' | 'otp' | 'register'>('password')
+  // Tabs: 'login' | 'register' (OTP hanya untuk pendaftaran akun baru)
+  const [authMethod, setAuthMethod] = useState<'login' | 'register'>('login')
 
-  // Form states
+  // Login form states
   const [email, setEmail] = useState<string>('')
   const [password, setPassword] = useState<string>('')
+  const [showLoginPassword, setShowLoginPassword] = useState<boolean>(false)
+
+  // Registration form states
   const [name, setName] = useState<string>('')
   const [phone, setPhone] = useState<string>('')
   const [role, setRole] = useState<UserRole>('mahasiswa')
+  const [regPassword, setRegPassword] = useState<string>('')
+  const [regConfirmPassword, setRegConfirmPassword] = useState<string>('')
+  const [showRegPassword, setShowRegPassword] = useState<boolean>(false)
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState<boolean>(false)
 
-  // OTP flow states
+  // OTP flow states (hanya untuk register)
   const [otpStep, setOtpStep] = useState<boolean>(false)
   const [otpCode, setOtpCode] = useState<string>('')
   const [otpToken, setOtpToken] = useState<string>('')
@@ -47,42 +52,7 @@ export default function LoginPage() {
   const [isAutoResending, setIsAutoResending] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
 
-  // 1. Password Login Handler (Direct login, e.g. Admin farras.85.243@gmail.com / FAS99905)
-  const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!email) {
-      toast.error('Alamat email wajib diisi!')
-      return
-    }
-
-    if (!password) {
-      toast.error('Password wajib diisi!')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const result = await DataService.authenticateUser(email, password)
-      if (result.success && result.user) {
-        loginWithCustomUser(result.user)
-        toast.success(`Selamat datang, ${result.user.name}!`)
-        if (result.user.role === 'admin') {
-          router.push('/admin')
-        } else {
-          router.push('/')
-        }
-      } else {
-        toast.error(result.message || 'Login gagal. Periksa kembali email dan password Anda.')
-      }
-    } catch (err: any) {
-      toast.error('Terjadi kesalahan saat memproses login.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Otomatis kirim ulang OTP jika waktu 5 menit kedaluwarsa
+  // Otomatis kirim ulang OTP jika waktu 5 menit kedaluwarsa pada proses pendaftaran
   const handleAutoResendOtp = useCallback(async () => {
     if (isAutoResending || loading || !email) return
     setIsAutoResending(true)
@@ -134,16 +104,67 @@ export default function LoginPage() {
     return () => clearInterval(timer)
   }, [otpStep, timeLeft, handleAutoResendOtp])
 
-  // 2. Request OTP Code Handler
-  const handleRequestOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
+  // 1. Login Handler (Email + Password langsung, tanpa OTP)
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
 
     if (!email) {
       toast.error('Alamat email wajib diisi!')
       return
     }
 
-    // Role validation: Mahasiswa & Dosen require Gunadarma email
+    if (!password) {
+      toast.error('Password wajib diisi!')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const result = await DataService.authenticateUser(email, password)
+      if (result.success && result.user) {
+        loginWithCustomUser(result.user)
+        toast.success(`Selamat datang, ${result.user.name}!`)
+        if (result.user.role === 'admin') {
+          router.push('/admin')
+        } else {
+          router.push('/')
+        }
+      } else {
+        toast.error(result.message || 'Login gagal. Periksa kembali email dan password Anda.')
+      }
+    } catch (err: any) {
+      toast.error('Terjadi kesalahan saat memproses login.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 2. Request OTP Code Handler (Hanya saat Pembuatan Akun Baru)
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+
+    if (!name.trim()) {
+      toast.error('Nama lengkap wajib diisi!')
+      return
+    }
+
+    if (!email) {
+      toast.error('Alamat email wajib diisi!')
+      return
+    }
+
+    // Validasi Password pendaftaran
+    if (!regPassword || regPassword.length < 6) {
+      toast.error('Password minimal 6 karakter demi keamanan akun Anda!')
+      return
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      toast.error('Konfirmasi password tidak cocok dengan password yang dimasukkan!')
+      return
+    }
+
+    // Validasi Role: Mahasiswa & Dosen wajib email Gunadarma
     const cleanEmail = email.toLowerCase().trim()
     const isAdminEmail = cleanEmail === 'farras.85.243@gmail.com' || cleanEmail === 'far99905@gmail.com'
 
@@ -175,7 +196,7 @@ export default function LoginPage() {
           { duration: 6000 }
         )
       } else {
-        toast.error(data.message || 'Gagal mengirimkan kode OTP.')
+        toast.error(data.message || 'Gagal mengirimkan kode OTP verifikasi.')
       }
     } catch (err) {
       toast.error('Gagal menghubungi server untuk mengirim OTP.')
@@ -184,7 +205,7 @@ export default function LoginPage() {
     }
   }
 
-  // 3. Verify OTP Code Handler
+  // 3. Verify OTP Code Handler (Verifikasi email untuk menyelesaikan pendaftaran)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -202,20 +223,21 @@ export default function LoginPage() {
           email: email.toLowerCase().trim(),
           code: otpCode.trim(),
           otpToken,
-          name,
+          name: name.trim(),
           role,
-          phone,
+          phone: phone.trim(),
+          password: regPassword, // Simpan password yang dibuat
         }),
       })
 
       const data = await res.json()
 
       if (data.success && data.user) {
-        // Save user to DataService and local session
+        // Simpan user dengan password ke DataService dan session lokal
         await DataService.createOrUpdateUser(data.user)
         loginWithCustomUser(data.user)
 
-        toast.success(`Verifikasi berhasil! Selamat datang, ${data.user.name}.`)
+        toast.success(`Akun berhasil dibuat & diverifikasi! Selamat datang, ${data.user.name}.`)
         if (data.user.role === 'admin') {
           router.push('/admin')
         } else {
@@ -226,7 +248,7 @@ export default function LoginPage() {
           setOtpToken(data.nextOtpToken)
         }
         if (data.expired) {
-          // Jika server menyatakan kode sudah kedaluwarsa, otomatis kirim ulang!
+          toast.error('Kode OTP telah kedaluwarsa. Mengirimkan kode baru otomatis ke email Anda...')
           handleAutoResendOtp()
         } else {
           toast.error(data.message || 'Kode OTP tidak valid atau telah kedaluwarsa.')
@@ -247,7 +269,7 @@ export default function LoginPage() {
           UG
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-          Masuk ke Portal UGFound
+          Portal Akun UGFound
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">
           Sistem Informasi Layanan Barang Hilang &amp; Temuan Universitas Gunadarma
@@ -256,36 +278,22 @@ export default function LoginPage() {
 
       {/* Main Authentication Card */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden">
-        {/* Method Switcher Tabs */}
+        {/* Method Switcher Tabs: 2 Tabs Saja (Login Email & Password vs Daftar Akun Baru) */}
         <div className="flex border-b border-slate-100 bg-slate-50/70 p-1.5 text-xs font-bold">
           <button
             type="button"
             onClick={() => {
-              setAuthMethod('password')
+              setAuthMethod('login')
               setOtpStep(false)
             }}
-            className={`flex-1 py-2.5 rounded-xl transition cursor-pointer ${
-              authMethod === 'password'
+            className={`flex-1 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
+              authMethod === 'login'
                 ? 'bg-white text-blue-700 shadow-xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Masuk dengan Password
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMethod('otp')
-              setOtpStep(false)
-            }}
-            className={`flex-1 py-2.5 rounded-xl transition cursor-pointer ${
-              authMethod === 'otp'
-                ? 'bg-white text-blue-700 shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Login dengan OTP Email
+            <Lock className="w-3.5 h-3.5" />
+            <span>Masuk ke Akun</span>
           </button>
 
           <button
@@ -294,22 +302,25 @@ export default function LoginPage() {
               setAuthMethod('register')
               setOtpStep(false)
             }}
-            className={`flex-1 py-2.5 rounded-xl transition cursor-pointer ${
+            className={`flex-1 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
               authMethod === 'register'
                 ? 'bg-white text-blue-700 shadow-xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Daftar Akun Baru
+            <User className="w-3.5 h-3.5" />
+            <span>Daftar Akun Baru</span>
           </button>
         </div>
 
         <div className="p-6 sm:p-8 space-y-6">
-          {/* TAB 1: Password Login */}
-          {authMethod === 'password' && (
+          {/* ========================================================================= */}
+          {/* TAB 1: LOGIN (EMAIL + PASSWORD) - TANPA OTP                              */}
+          {/* ========================================================================= */}
+          {authMethod === 'login' && (
             <form onSubmit={handlePasswordLogin} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Email Pengguna / Akun</label>
+                <label className="text-xs font-bold text-slate-700">Alamat Email</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -328,13 +339,20 @@ export default function LoginPage() {
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    type={showLoginPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Masukkan password Anda"
                     required
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
+                    className="w-full pl-10 pr-11 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition p-1"
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -346,7 +364,7 @@ export default function LoginPage() {
                 {loading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Memverifikasi...</span>
+                    <span>Memverifikasi Akun...</span>
                   </>
                 ) : (
                   <>
@@ -355,74 +373,141 @@ export default function LoginPage() {
                   </>
                 )}
               </button>
+
+              <div className="text-center pt-2 border-t border-slate-100">
+                <p className="text-xs text-slate-500">
+                  Belum memiliki akun UGFound?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMethod('register')
+                      setOtpStep(false)
+                    }}
+                    className="text-blue-600 font-bold hover:underline cursor-pointer"
+                  >
+                    Daftar Akun Baru
+                  </button>
+                </p>
+              </div>
             </form>
           )}
 
-          {/* TAB 2 & 3: OTP Flow (Request OTP / Verify OTP) */}
-          {(authMethod === 'otp' || authMethod === 'register') && (
+          {/* ========================================================================= */}
+          {/* TAB 2: DAFTAR AKUN BARU (FORM PENDAFTARAN LENGKAP + OTP EMAIL VERIFIKASI)  */}
+          {/* ========================================================================= */}
+          {authMethod === 'register' && (
             <div>
               {!otpStep ? (
-                /* Step 1: Request OTP Form */
+                /* Step 1: Input Data Pendaftaran + Password */
                 <form onSubmit={handleRequestOtp} className="space-y-4">
-                  {authMethod === 'register' && (
-                    <>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700">Nama Lengkap</label>
-                        <div className="relative">
-                          <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                          <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Masukkan nama lengkap Anda"
-                            required
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700">Peran Sivitas Kampus</label>
-                        <select
-                          value={role}
-                          onChange={(e) => setRole(e.target.value as UserRole)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm bg-white transition"
-                        >
-                          <option value="mahasiswa">Mahasiswa (Email Gunadarma)</option>
-                          <option value="dosen">Dosen / Tenaga Pengajar (Email Gunadarma)</option>
-                          <option value="satpam">Petugas Keamanan / Satpam (Email Bebas / Pribadi)</option>
-                          <option value="staf_kebersihan">Staf Kebersihan Kampus (Email Bebas / Pribadi)</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700">Nomor WhatsApp Aktif</label>
-                        <div className="relative">
-                          <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                          <input
-                            type="tel"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            placeholder="Masukkan nomor WhatsApp aktif"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Nama Lengkap</label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Contoh: Farras Hazim"
+                        required
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
+                      />
+                    </div>
+                  </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">Alamat Email Penerima OTP</label>
+                    <label className="text-xs font-bold text-slate-700">Peran Sivitas Kampus</label>
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value as UserRole)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm bg-white transition"
+                    >
+                      <option value="mahasiswa">Mahasiswa (Email Gunadarma)</option>
+                      <option value="dosen">Dosen / Tenaga Pengajar (Email Gunadarma)</option>
+                      <option value="satpam">Petugas Keamanan / Satpam (Email Bebas / Pribadi)</option>
+                      <option value="staf_kebersihan">Staf Kebersihan Kampus (Email Bebas / Pribadi)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Nomor WhatsApp Aktif</label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="0812-xxxx-xxxx (untuk kontak serah terima barang)"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Alamat Email Akun</label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Masukkan alamat email Anda"
+                        placeholder={
+                          role === 'mahasiswa'
+                            ? 'npm@student.gunadarma.ac.id'
+                            : role === 'dosen'
+                            ? 'nama@gunadarma.ac.id'
+                            : 'email.anda@gmail.com'
+                        }
                         required
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
                       />
+                    </div>
+                  </div>
+
+                  {/* Input Password Baru */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Password Baru</label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showRegPassword ? 'text' : 'password'}
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="Min. 6 karakter"
+                          required
+                          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegPassword(!showRegPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition p-1"
+                        >
+                          {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Konfirmasi Password</label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showRegConfirmPassword ? 'text' : 'password'}
+                          value={regConfirmPassword}
+                          onChange={(e) => setRegConfirmPassword(e.target.value)}
+                          placeholder="Ulangi password"
+                          required
+                          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition p-1"
+                        >
+                          {showRegConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -430,10 +515,10 @@ export default function LoginPage() {
                   <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 space-y-1">
                     <div className="flex items-center gap-1 font-bold">
                       <Shield className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Verifikasi Email Otentik</span>
+                      <span>Verifikasi Email Pendaftaran</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      Sistem akan mengirimkan 6-digit kode OTP langsung ke alamat email yang Anda masukkan. Kode berlaku selama 5 menit (otomatis kirim ulang jika habis).
+                      Setelah menekan tombol di bawah, sistem akan mengirimkan 6-digit kode OTP ke email Anda untuk memvalidasi kepemilikan akun.
                     </p>
                   </div>
 
@@ -445,24 +530,40 @@ export default function LoginPage() {
                     {loading ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Mengirimkan OTP...</span>
+                        <span>Mengirimkan OTP Verifikasi...</span>
                       </>
                     ) : (
                       <>
-                        <span>Kirim Kode OTP ke Email</span>
+                        <span>Lanjut Verifikasi Email (Kirim OTP)</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </button>
+
+                  <div className="text-center pt-2 border-t border-slate-100">
+                    <p className="text-xs text-slate-500">
+                      Sudah punya akun?{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMethod('login')
+                          setOtpStep(false)
+                        }}
+                        className="text-blue-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Masuk di sini
+                      </button>
+                    </p>
+                  </div>
                 </form>
               ) : (
-                /* Step 2: Input OTP Verification Code */
+                /* Step 2: Input OTP Verification Code (Hanya saat Pendaftaran) */
                 <form onSubmit={handleVerifyOtp} className="space-y-5">
                   <div className="text-center space-y-1">
                     <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-2">
                       <KeyRound className="w-6 h-6" />
                     </div>
-                    <h3 className="text-base font-bold text-slate-900">Periksa Email Anda</h3>
+                    <h3 className="text-base font-bold text-slate-900">Verifikasi Email Pendaftaran</h3>
                     <p className="text-xs text-slate-500">
                       Kode OTP 6-digit telah dikirimkan ke:
                     </p>
@@ -484,7 +585,6 @@ export default function LoginPage() {
                       Kode OTP berlaku selama <strong>5 menit</strong>. Jika waktu habis, sistem akan <strong>otomatis mengirimkan kode OTP baru</strong> ke email Anda.
                     </p>
                   </div>
-
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 text-center block">
@@ -510,12 +610,12 @@ export default function LoginPage() {
                     {loading ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Memverifikasi Kode...</span>
+                        <span>Menyelesaikan Pendaftaran...</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>Verifikasi &amp; Masuk</span>
+                        <span>Verifikasi &amp; Buat Akun</span>
                       </>
                     )}
                   </button>
@@ -526,11 +626,11 @@ export default function LoginPage() {
                       onClick={() => setOtpStep(false)}
                       className="text-slate-600 hover:text-slate-900 underline cursor-pointer"
                     >
-                      ← Ganti Email
+                      ← Ubah Data Pendaftaran
                     </button>
                     <button
                       type="button"
-                      onClick={handleRequestOtp}
+                      onClick={() => handleRequestOtp()}
                       disabled={loading}
                       className="text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
                     >

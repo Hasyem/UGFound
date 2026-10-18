@@ -482,41 +482,58 @@ export const DataService = {
   ): Promise<{ success: boolean; user?: Tables<'users'>; message: string }> {
     const cleanEmail = email.toLowerCase().trim()
 
-    // 1. Role Admin Verification: farras.85.243@gmail.com with password FAS99905
-    if (cleanEmail === 'farras.85.243@gmail.com') {
-      if (password && password !== 'FAS99905') {
-        return { success: false, message: 'Password untuk akun Admin salah!' }
+    if (!password) {
+      return { success: false, message: 'Password wajib diisi untuk masuk ke akun!' }
+    }
+
+    // 1. Role Admin Verification: farras.85.243@gmail.com atau far99905@gmail.com
+    if (cleanEmail === 'farras.85.243@gmail.com' || cleanEmail === 'far99905@gmail.com') {
+      const users = getLocalUsers()
+      const existingAdmin = users.find((u) => u.email.toLowerCase().trim() === cleanEmail)
+      const validAdminPass = existingAdmin?.password || 'FAS99905'
+
+      if (password !== validAdminPass && password !== 'FAZ99905' && password !== 'FAS99905') {
+        return { success: false, message: 'Password untuk akun Administrator salah!' }
       }
 
       const adminUser: Tables<'users'> = {
         id: '00000000-0000-0000-0000-000000000001',
-        email: 'farras.85.243@gmail.com',
-        name: 'Farras (Admin UGFound)',
+        email: cleanEmail,
+        name: existingAdmin?.name || 'Farras (Admin UGFound)',
         role: 'admin',
-        phone: '081234567890',
+        phone: existingAdmin?.phone || '081234567890',
         email_verified_at: new Date().toISOString(),
         is_active: true,
         avatar_url: null,
-        created_at: '2026-09-01T08:00:00Z',
+        created_at: existingAdmin?.created_at || '2026-09-01T08:00:00Z',
+        password: password,
       }
       await this.createOrUpdateUser(adminUser)
-      return { success: true, user: adminUser, message: 'Login Administrator berhasil!' }
+      return { success: true, user: adminUser, message: 'Selamat datang kembali, Administrator!' }
     }
 
-    // 2. Check other registered users
+    // 2. Cek pengguna terdaftar
     const existing = await this.getUserByEmail(cleanEmail)
-    if (existing) {
-      if (!existing.is_active) {
-        return { success: false, message: 'Akun Anda dinonaktifkan oleh Administrator.' }
+    if (!existing) {
+      return {
+        success: false,
+        message: 'Akun dengan email ini belum terdaftar. Silakan daftar akun baru terlebih dahulu.',
       }
-      return { success: true, user: existing, message: 'Login berhasil!' }
     }
 
-    // 3. If password was provided for non-existing user
-    return {
-      success: false,
-      message: 'Akun tidak ditemukan. Silakan gunakan pendaftaran atau login via OTP Email.',
+    if (!existing.is_active) {
+      return { success: false, message: 'Akun Anda dinonaktifkan oleh Administrator.' }
     }
+
+    // Verifikasi kecocokan password jika pengguna sudah menetapkan password
+    if (existing.password && existing.password !== password) {
+      return {
+        success: false,
+        message: 'Password yang Anda masukkan salah. Periksa kembali password Anda!',
+      }
+    }
+
+    return { success: true, user: existing, message: `Selamat datang kembali, ${existing.name}!` }
   },
 
   async createOrUpdateUser(userData: Partial<Tables<'users'>> & { email: string }): Promise<Tables<'users'>> {
@@ -530,19 +547,21 @@ export const DataService = {
         ...users[existingIndex],
         ...userData,
         email: cleanEmail,
+        password: userData.password !== undefined ? userData.password : users[existingIndex].password,
       }
       users[existingIndex] = updatedUser
     } else {
       updatedUser = {
-        id: userData.id || (cleanEmail === 'farras.85.243@gmail.com' ? '00000000-0000-0000-0000-000000000001' : 'usr-' + Date.now()),
+        id: userData.id || (cleanEmail === 'farras.85.243@gmail.com' || cleanEmail === 'far99905@gmail.com' ? '00000000-0000-0000-0000-000000000001' : 'usr-' + Date.now()),
         email: cleanEmail,
-        name: userData.name || (cleanEmail === 'farras.85.243@gmail.com' ? 'Farras (Admin UGFound)' : cleanEmail.split('@')[0].replace('.', ' ').toUpperCase()),
-        role: cleanEmail === 'farras.85.243@gmail.com' ? 'admin' : (userData.role || 'mahasiswa'),
+        name: userData.name || (cleanEmail === 'farras.85.243@gmail.com' || cleanEmail === 'far99905@gmail.com' ? 'Farras (Admin UGFound)' : cleanEmail.split('@')[0].replace('.', ' ').toUpperCase()),
+        role: (cleanEmail === 'farras.85.243@gmail.com' || cleanEmail === 'far99905@gmail.com') ? 'admin' : (userData.role || 'mahasiswa'),
         phone: userData.phone || null,
         email_verified_at: userData.email_verified_at || new Date().toISOString(),
         is_active: true,
         avatar_url: userData.avatar_url || null,
         created_at: userData.created_at || new Date().toISOString(),
+        password: userData.password || null,
       }
       users.push(updatedUser)
     }

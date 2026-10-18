@@ -27,6 +27,7 @@ export interface Database {
           is_active: boolean
           avatar_url: string | null
           created_at: string
+          password?: string | null
         }
         Insert: {
           id?: string
@@ -38,6 +39,7 @@ export interface Database {
           is_active?: boolean
           avatar_url?: string | null
           created_at?: string
+          password?: string | null
         }
         Update: {
           id?: string
@@ -49,6 +51,7 @@ export interface Database {
           is_active?: boolean
           avatar_url?: string | null
           created_at?: string
+          password?: string | null
         }
       }
       reports: {

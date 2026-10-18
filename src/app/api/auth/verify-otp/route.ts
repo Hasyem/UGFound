@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { email, code, otpToken, name, role, phone } = body
+    const { email, code, otpToken, name, role, phone, password } = body
 
     if (!email || !code) {
       return NextResponse.json(
@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       is_active: true,
       avatar_url: null,
       created_at: new Date().toISOString(),
+      password: password || null,
     }
 
     const resp = NextResponse.json({
