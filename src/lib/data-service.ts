@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/client'
 import { MOCK_REPORTS, MOCK_USERS, MOCK_FLAGS } from './mock-data'
 import type { ReportWithRelations, ReportType, ReportStatus, Tables, FlagReason } from '@/types/database'
 
-const LOCAL_STORAGE_KEY = 'ugfound_reports_v1'
-const LOCAL_FLAGS_KEY = 'ugfound_flags_v1'
+const LOCAL_STORAGE_KEY = 'ugfound_reports_v2'
+const LOCAL_FLAGS_KEY = 'ugfound_flags_v2'
 const LOCAL_USERS_KEY = 'ugfound_users_v1'
 
 function isSupabaseConfigured(): boolean {
