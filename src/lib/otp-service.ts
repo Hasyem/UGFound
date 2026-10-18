@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import crypto from 'crypto'
 
 interface OtpEntry {
   code: string
@@ -6,18 +7,77 @@ interface OtpEntry {
   attempts: number
 }
 
-// In-memory store for OTPs (keyed by lowercase email)
+// In-memory store (untuk fallback localhost / single instance)
 const otpStore = new Map<string, OtpEntry>()
+
+// Batas waktu kedaluwarsa 5 menit (300.000 ms) sesuai permintaan user
+export const OTP_EXPIRY_MS = 5 * 60 * 1000
 
 export interface SendOtpResult {
   success: boolean
   emailSent: boolean
   message: string
+  otpToken?: string
+  expiresInSeconds?: number
 }
 
 export interface VerifyOtpResult {
   success: boolean
+  expired?: boolean
   message: string
+  nextOtpToken?: string
+}
+
+// ============================================================================
+// TOKEN STATELESS (AES-256-GCM)
+// Menjamin kode OTP dapat diverifikasi di Vercel Serverless tanpa database
+// dan tanpa terpengaruh cold start / multi-container Vercel.
+// ============================================================================
+const ALGORITHM = 'aes-256-gcm'
+
+function getEncryptionKey(): Buffer {
+  const secret =
+    process.env.OTP_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SMTP_PASS ||
+    'ugfound-secure-otp-encryption-gunadarma-2026'
+  return crypto.createHash('sha256').update(secret).digest()
+}
+
+export function encryptOtpToken(payload: { email: string; code: string; expiresAt: number; attempts: number }): string {
+  const key = getEncryptionKey()
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
+
+  const text = JSON.stringify(payload)
+  let encrypted = cipher.update(text, 'utf8')
+  encrypted = Buffer.concat([encrypted, cipher.final()])
+  const tag = cipher.getAuthTag()
+
+  const combined = Buffer.concat([iv, tag, encrypted])
+  return combined.toString('base64url')
+}
+
+export function decryptOtpToken(token: string): { email: string; code: string; expiresAt: number; attempts: number } | null {
+  try {
+    const combined = Buffer.from(token, 'base64url')
+    if (combined.length < 28) return null
+
+    const iv = combined.subarray(0, 12)
+    const tag = combined.subarray(12, 28)
+    const encrypted = combined.subarray(28)
+
+    const key = getEncryptionKey()
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
+    decipher.setAuthTag(tag)
+
+    let decrypted = decipher.update(encrypted, undefined, 'utf8')
+    decrypted += decipher.final('utf8')
+
+    return JSON.parse(decrypted)
+  } catch {
+    return null
+  }
 }
 
 function getMailTransporter() {
@@ -66,10 +126,19 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
   // Generate 6-digit secure numeric OTP
   const code = Math.floor(100000 + Math.random() * 900000).toString()
 
-  // 10 minutes expiry
-  const expiresAt = Date.now() + 10 * 60 * 1000
+  // 5 minutes expiry
+  const expiresAt = Date.now() + OTP_EXPIRY_MS
 
+  // Simpan ke in-memory store
   otpStore.set(cleanEmail, {
+    code,
+    expiresAt,
+    attempts: 0,
+  })
+
+  // Enkripsi token stateless untuk serverless Vercel
+  const otpToken = encryptOtpToken({
+    email: cleanEmail,
     code,
     expiresAt,
     attempts: 0,
@@ -77,7 +146,7 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
 
   // Log server terminal untuk pengawasan teknis admin (TIDAK diekspos ke browser / client)
   console.log(`\n======================================================`)
-  console.log(`[UGFound OTP Service] KODE OTP UNTUK ${cleanEmail}: ${code}`)
+  console.log(`[UGFound OTP Service] KODE OTP UNTUK ${cleanEmail}: ${code} (Berlaku 5 Menit)`)
   console.log(`======================================================\n`)
 
   const transporter = getMailTransporter()
@@ -87,7 +156,7 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
     return {
       success: false,
       emailSent: false,
-      message: `Layanan pengiriman email belum aktif. Harap lengkapi SMTP_USER dan SMTP_PASS di file .env.local agar kode OTP terkirim ke email Anda.`,
+      message: `Layanan pengiriman email belum aktif. Harap lengkapi SMTP_USER dan SMTP_PASS di environment variables agar kode OTP terkirim ke email Anda.`,
     }
   }
 
@@ -128,8 +197,8 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
               <div class="otp-code">${code}</div>
             </div>
             <p class="warning">
-              ⏱️ <strong>Penting:</strong> Kode ini hanya berlaku selama <strong>10 menit</strong>.<br/>
-              Demi keamanan akun Anda, jangan berikan atau bagikan kode ini kepada siapa pun.
+              ⏱️ <strong>Penting:</strong> Kode ini hanya berlaku selama <strong>5 menit</strong>.<br/>
+              Demi keamanan akun Anda, jangan berikan atau bagikan kode ini kepada siapa pun. Jika waktu habis, sistem akan otomatis mengirimkan kode baru.
             </p>
           </div>
           <div class="footer">
@@ -143,19 +212,20 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
     await transporter.sendMail({
       from: fromAddress,
       to: cleanEmail,
-      subject: `[UGFound] Kode Verifikasi OTP Anda: ${code}`,
-      text: `Kode verifikasi OTP UGFound Anda adalah: ${code}. Berlaku selama 10 menit. Jangan berikan kode ini kepada pihak mana pun demi menjaga keamanan akun.`,
+      subject: `[UGFound] Kode Verifikasi OTP Anda (${code}) - Berlaku 5 Menit`,
+      text: `Kode verifikasi OTP UGFound Anda adalah: ${code}. Berlaku selama 5 menit. Jangan berikan kode ini kepada pihak mana pun demi menjaga keamanan akun.`,
       html: htmlContent,
     })
 
     return {
       success: true,
       emailSent: true,
-      message: `Kode verifikasi OTP telah dikirimkan ke email ${cleanEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
+      otpToken,
+      expiresInSeconds: 300,
+      message: `Kode verifikasi OTP telah dikirimkan ke email ${cleanEmail}. Berlaku selama 5 menit.`,
     }
   } catch (error: any) {
     console.error('[UGFound OTP Service] Error sending email via SMTP:', error)
-    // Jangan pernah mengekspos kode OTP di pesan error
     return {
       success: false,
       emailSent: false,
@@ -164,14 +234,60 @@ export async function sendOtpToEmail(email: string, recipientName?: string): Pro
   }
 }
 
-export function verifyOtp(email: string, code: string): VerifyOtpResult {
+export function verifyOtp(email: string, code: string, token?: string): VerifyOtpResult {
   const cleanEmail = email.toLowerCase().trim()
+  const cleanCode = code.trim()
+
+  // 1. Verifikasi menggunakan Stateless Decrypted Token (untuk Vercel Serverless)
+  if (token) {
+    const data = decryptOtpToken(token)
+    if (data && data.email === cleanEmail) {
+      if (Date.now() > data.expiresAt) {
+        return {
+          success: false,
+          expired: true,
+          message: 'Kode OTP telah kedaluwarsa (melebihi batas 5 menit). Sistem akan otomatis mengirimkan kode baru.',
+        }
+      }
+
+      if (data.attempts >= 5) {
+        return {
+          success: false,
+          expired: true,
+          message: 'Terlalu banyak percobaan salah (maksimal 5 kali). Sistem akan otomatis mengirimkan kode baru.',
+        }
+      }
+
+      if (data.code !== cleanCode) {
+        const nextAttempts = (data.attempts || 0) + 1
+        const nextOtpToken = encryptOtpToken({
+          ...data,
+          attempts: nextAttempts,
+        })
+        return {
+          success: false,
+          message: `Kode OTP yang Anda masukkan salah! (Percobaan ke-${nextAttempts} dari 5)`,
+          nextOtpToken,
+        }
+      }
+
+      // Verifikasi berhasil!
+      otpStore.delete(cleanEmail)
+      return {
+        success: true,
+        message: 'Kode OTP berhasil diverifikasi!',
+      }
+    }
+  }
+
+  // 2. Fallback ke In-Memory Store (untuk localhost / single server)
   const entry = otpStore.get(cleanEmail)
 
   if (!entry) {
     return {
       success: false,
-      message: 'Kode OTP belum diminta atau sudah kedaluwarsa. Silakan minta kode baru.',
+      expired: true,
+      message: 'Kode OTP belum diminta atau sudah kedaluwarsa. Sistem akan mengirimkan kode baru.',
     }
   }
 
@@ -179,7 +295,8 @@ export function verifyOtp(email: string, code: string): VerifyOtpResult {
     otpStore.delete(cleanEmail)
     return {
       success: false,
-      message: 'Kode OTP telah kedaluwarsa (melebihi batas 10 menit). Silakan minta kode baru.',
+      expired: true,
+      message: 'Kode OTP telah kedaluwarsa (melebihi batas 5 menit). Sistem akan otomatis mengirimkan kode baru.',
     }
   }
 
@@ -187,11 +304,12 @@ export function verifyOtp(email: string, code: string): VerifyOtpResult {
     otpStore.delete(cleanEmail)
     return {
       success: false,
+      expired: true,
       message: 'Terlalu banyak percobaan salah. Silakan minta kode OTP baru demi keamanan.',
     }
   }
 
-  if (entry.code !== code.trim()) {
+  if (entry.code !== cleanCode) {
     entry.attempts += 1
     return {
       success: false,
@@ -206,4 +324,3 @@ export function verifyOtp(email: string, code: string): VerifyOtpResult {
     message: 'Kode OTP berhasil diverifikasi!',
   }
 }
-

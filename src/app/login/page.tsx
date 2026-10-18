@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Phone,
   Info,
+  Clock,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { isGunadarmaEmail } from '@/lib/utils'
@@ -41,6 +42,9 @@ export default function LoginPage() {
   // OTP flow states
   const [otpStep, setOtpStep] = useState<boolean>(false)
   const [otpCode, setOtpCode] = useState<string>('')
+  const [otpToken, setOtpToken] = useState<string>('')
+  const [timeLeft, setTimeLeft] = useState<number>(300) // 5 menit = 300 detik
+  const [isAutoResending, setIsAutoResending] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
 
   // 1. Password Login Handler (Direct login, e.g. Admin farras.85.243@gmail.com / FAS99905)
@@ -78,9 +82,61 @@ export default function LoginPage() {
     }
   }
 
+  // Otomatis kirim ulang OTP jika waktu 5 menit kedaluwarsa
+  const handleAutoResendOtp = useCallback(async () => {
+    if (isAutoResending || loading || !email) return
+    setIsAutoResending(true)
+    toast('Waktu 5 menit telah habis. Mengirimkan kode OTP baru secara otomatis...', {
+      icon: '🔄',
+      duration: 5000,
+    })
+
+    try {
+      const cleanEmail = email.toLowerCase().trim()
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, name }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        if (data.otpToken) setOtpToken(data.otpToken)
+        setTimeLeft(300)
+        setOtpCode('')
+        toast.success(`Kode OTP baru telah otomatis dikirimkan ke ${cleanEmail}! Periksa email Anda.`, {
+          duration: 6000,
+        })
+      } else {
+        toast.error(data.message || 'Gagal mengirimkan kode OTP baru.')
+      }
+    } catch {
+      toast.error('Gagal menghubungi server untuk mengirimkan kode OTP otomatis.')
+    } finally {
+      setIsAutoResending(false)
+    }
+  }, [isAutoResending, loading, email, name])
+
+  // Countdown timer 5 menit (300 detik)
+  useEffect(() => {
+    if (!otpStep) return
+
+    if (timeLeft <= 0) {
+      handleAutoResendOtp()
+      return
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [otpStep, timeLeft, handleAutoResendOtp])
+
   // 2. Request OTP Code Handler
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
 
     if (!email) {
       toast.error('Alamat email wajib diisi!')
@@ -89,7 +145,7 @@ export default function LoginPage() {
 
     // Role validation: Mahasiswa & Dosen require Gunadarma email
     const cleanEmail = email.toLowerCase().trim()
-    const isAdminEmail = cleanEmail === 'farras.85.243@gmail.com'
+    const isAdminEmail = cleanEmail === 'farras.85.243@gmail.com' || cleanEmail === 'far99905@gmail.com'
 
     if (!isAdminEmail && (role === 'mahasiswa' || role === 'dosen') && !isGunadarmaEmail(cleanEmail)) {
       toast.error(
@@ -111,8 +167,11 @@ export default function LoginPage() {
 
       if (data.success) {
         setOtpStep(true)
+        if (data.otpToken) setOtpToken(data.otpToken)
+        setTimeLeft(300)
+        setOtpCode('')
         toast.success(
-          data.message || `Kode OTP 6-digit telah dikirimkan ke email ${cleanEmail}! Periksa kotak masuk atau spam Anda.`,
+          data.message || `Kode OTP 6-digit telah dikirimkan ke email ${cleanEmail}! Berlaku selama 5 menit.`,
           { duration: 6000 }
         )
       } else {
@@ -142,6 +201,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: email.toLowerCase().trim(),
           code: otpCode.trim(),
+          otpToken,
           name,
           role,
           phone,
@@ -162,7 +222,15 @@ export default function LoginPage() {
           router.push('/')
         }
       } else {
-        toast.error(data.message || 'Kode OTP tidak valid atau telah kedaluwarsa.')
+        if (data.nextOtpToken) {
+          setOtpToken(data.nextOtpToken)
+        }
+        if (data.expired) {
+          // Jika server menyatakan kode sudah kedaluwarsa, otomatis kirim ulang!
+          handleAutoResendOtp()
+        } else {
+          toast.error(data.message || 'Kode OTP tidak valid atau telah kedaluwarsa.')
+        }
       }
     } catch {
       toast.error('Terjadi kesalahan saat memverifikasi OTP.')
@@ -365,7 +433,7 @@ export default function LoginPage() {
                       <span>Verifikasi Email Otentik</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      Sistem akan mengirimkan 6-digit kode OTP langsung ke alamat email yang Anda masukkan. Kode berlaku selama 10 menit.
+                      Sistem akan mengirimkan 6-digit kode OTP langsung ke alamat email yang Anda masukkan. Kode berlaku selama 5 menit (otomatis kirim ulang jika habis).
                     </p>
                   </div>
 
@@ -400,6 +468,20 @@ export default function LoginPage() {
                     </p>
                     <p className="text-xs font-bold text-blue-700 bg-blue-50 py-1 px-3 rounded-lg inline-block">
                       {email}
+                    </p>
+                  </div>
+
+                  {/* Countdown Timer 5 Menit & Auto Resend Notice */}
+                  <div className="p-3 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-center space-y-1">
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-amber-900">
+                      <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                      <span>Waktu Tersisa:</span>
+                      <span className="font-mono text-sm font-black text-amber-950 bg-white px-2.5 py-0.5 rounded-lg border border-amber-200 shadow-xs">
+                        {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-700 leading-relaxed">
+                      Kode OTP berlaku selama <strong>5 menit</strong>. Jika waktu habis, sistem akan <strong>otomatis mengirimkan kode OTP baru</strong> ke email Anda.
                     </p>
                   </div>
 

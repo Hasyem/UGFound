@@ -16,7 +16,19 @@ export async function POST(request: Request) {
     }
 
     const result = await sendOtpToEmail(email, name)
-    return NextResponse.json(result)
+    const response = NextResponse.json(result)
+
+    if (result.success && result.otpToken) {
+      response.cookies.set('ugfound_otp_token', result.otpToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 360, // 6 minutes (covers 5-minute validity)
+      })
+    }
+
+    return response
   } catch (err: any) {
     console.error('Error in send-otp route:', err)
     return NextResponse.json(
